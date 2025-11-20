@@ -2,7 +2,8 @@
 
 **`lazypodman`** is a Bash wrapper that makes it easy to launch [Lazydocker](https://github.com/jesseduffield/lazydocker) against **local** or **remote rootless Podman** instances using SSH-based tunnels.
 
-- ✔️ Fancy interactive menu (Local / Remote / Tunnel-only)
+- ✔️ Fancy interactive menu (Local / Remote / Tunnel-only / Setup / Manage)
+- ✔️ **New:** Built-in wizard to setup remote connections (generates SSH keys, copies IDs)
 - ✔️ Auto-configures SSH tunnels to `podman-remote` sockets
 - ✔️ One-tunnel-per-remote with `--open`, `--persist`, `--stop`, `--restart`
 - ✔️ Fully Docker-compatible (sets `DOCKER_HOST` + `DOCKER_API_VERSION`)
@@ -36,7 +37,21 @@ Optional:
 
 ## 🔐 Remote Podman Setup (one-time)
 
-To manage **remote rootless Podman** instances, follow these steps.
+To manage **remote rootless Podman** instances, you can use the built-in wizard or set it up manually.
+
+### 🪄 Automatic Setup (Recommended)
+
+Run `lazypodman --setup` (or choose Option 4 in the menu).
+The script will guide you through:
+1.  Naming the connection.
+2.  Specifying the destination (`user@host`).
+3.  **Generating an SSH key** (ed25519) if you don't have one.
+4.  **Copying the SSH key** to the remote host (`ssh-copy-id`).
+5.  Adding the connection to `podman-remote`.
+
+### 📝 Manual Setup
+
+If you prefer to do it yourself:
 
 ### 1. Generate an SSH key
 
@@ -89,16 +104,24 @@ Make sure ~/.local/bin is in your PATH. Add this to your ~/.bashrc or ~/.zshrc:
 Interactive menu (recommended)
 `lazypodman`
 
-Option 1: Manage local rootless Podman
+Option 1: Local (rootless) Podman on this host
 
-Option 2: Pick from remote connections (via podman-remote)
+Option 2: Remote Podman via podman-remote connection (run Lazydocker)
 
-Option 3: Just open the tunnel (no Lazydocker)
+Option 3: Remote Podman: OPEN TUNNEL ONLY (no Lazydocker)
+
+Option 4: Setup new podman-remote connection (Wizard)
+
+Option 5: Manage Connections/Tunnels (List, Stop, Remove)
+
+Option 6: Exit
 
 ### CLI usage
 
 ```bash
 lazypodman                            # Run interactive Menu
+lazypodman --setup                    # Setup a new connection (Wizard)
+lazypodman --remove my-remote         # Remove a connection configuration
 lazypodman --local                    # Run against local Podman
 lazypodman --remote my-remote         # Open tunnel and run Lazydocker
 lazypodman --remote my-remote --persist  # Keep SSH tunnel alive after Lazydocker exits
@@ -120,6 +143,9 @@ lazypodman --kill-tunnels             # Kill all tunnels created by lazypodman
 
 **Kill all**
 `lazypodman --kill-tunnels`
+
+**Remove a connection**
+`lazypodman --remove my-remote` (or use Option 5 in the menu)
 
 ## 🛠️ To-Do
 
