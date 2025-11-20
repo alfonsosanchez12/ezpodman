@@ -38,6 +38,8 @@ usage(){
   cat <<'EOF'
 Usage:
   lazypodman                        # interactive menu
+  lazypodman --setup                # setup a new podman-remote connection
+  lazypodman --remove <name>        # remove a podman-remote connection
   lazypodman --local                # local rootless Podman
   lazypodman --remote <name>        # remote by connection name (run Lazydocker)
   lazypodman --remote <name> --persist
@@ -67,7 +69,15 @@ conn_json(){
   if podman-remote system connection list --format json >/dev/null 2>&1; then
     podman-remote system connection list --format json
   else
-    die "podman-remote v4+ with JSON output is required."
+    # If no connections exist, it might exit 0 with empty array or fail?
+    # Usually it returns [] if none. If it fails, it might be version issue.
+    # But if it returns nothing or fails, we can handle it.
+    # Actually podman-remote system connection list might return nothing if empty.
+    # Let's try to run it and capture.
+    local out
+    out="$(podman-remote system connection list --format json 2>/dev/null || echo "[]")"
+    [[ -z "$out" ]] && out="[]"
+    echo "$out"
   fi
 }
 
@@ -78,11 +88,113 @@ list_conns_sorted(){
     map("\(.Name)\t\(.URI)\t\(.Default)\t\(.Identity // "")")[]'
 }
 
+# Setup a new podman-remote connection interactively
+setup_connection(){
+  echo "Setting up a new podman-remote connection..." >&2
+  echo "This will run: podman-remote system connection add <name> <destination>" >&2
+  echo >&2
+
+  local name dest port identity socket_path
+
+  read -rp "Connection Name (e.g. my-server): " name
+  [[ -n "$name" ]] || die "Name is required."
+
+  read -rp "Destination (user@host or host): " dest
+  [[ -n "$dest" ]] || die "Destination is required."
+
+  read -rp "SSH Port [22]: " port
+  port="${port:-22}"
+
+  # SSH Key Check/Generation
+  local key_type="ed25519"
+  local key_file="${HOME}/.ssh/id_${key_type}"
+  local default_identity=""
+  
+  if [[ -f "$key_file" ]]; then
+    default_identity="$key_file"
+  else
+    echo "SSH key ($key_file) not found." >&2
+    read -rp "Generate one now? [Y/n]: " yn
+    if [[ "${yn:-Y}" =~ ^[Yy]$ ]]; then
+      ssh-keygen -t "$key_type" -f "$key_file" || die "Key generation failed."
+      echo "Key generated." >&2
+      default_identity="$key_file"
+    else
+      echo "Warning: Proceeding without a default SSH key." >&2
+    fi
+  fi
+
+  # Offer to copy key
+  if [[ -n "$default_identity" ]]; then
+    echo >&2
+    read -rp "Copy SSH key to remote host ($dest)? [y/N]: " yn
+    if [[ "${yn:-N}" =~ ^[Yy]$ ]]; then
+      # Need to parse user/host from dest for ssh-copy-id
+      # dest is user@host or host
+      # ssh-copy-id handles user@host fine.
+      # We also need port if not 22.
+      local copy_args=(-i "${default_identity}.pub")
+      [[ "$port" != "22" ]] && copy_args+=(-p "$port")
+      copy_args+=("$dest")
+      
+      echo "Running: ssh-copy-id ${copy_args[*]}" >&2
+      ssh-copy-id "${copy_args[@]}" || echo "Warning: ssh-copy-id failed. You may need to copy it manually." >&2
+    fi
+  fi
+
+  echo >&2
+  if [[ -n "$default_identity" ]]; then
+    read -rp "Identity File [$default_identity]: " identity
+    identity="${identity:-$default_identity}"
+  else
+    read -rp "Identity File (optional, press Enter to skip): " identity
+  fi
+  
+  # Default rootless path
+  local def_sock="/run/user/1000/podman/podman.sock"
+  read -rp "Remote Socket Path [$def_sock]: " socket_path
+  socket_path="${socket_path:-$def_sock}"
+
+  # Clean dest of any existing ssh:// prefix just in case
+  dest="${dest#ssh://}"
+  
+  # Check if port is in dest
+  if [[ "$dest" != *":"* ]]; then
+    dest="${dest}:${port}"
+  fi
+
+  local uri="ssh://${dest}${socket_path}"
+  
+  echo "Adding connection '$name' -> $uri" >&2
+  local cmd=(podman-remote system connection add)
+  [[ -n "$identity" ]] && cmd+=(--identity "$identity")
+  cmd+=("$name" "$uri")
+
+  "${cmd[@]}" || die "Failed to add connection."
+  
+  echo "Connection '$name' added successfully." >&2
+}
+
 # Choose a remote connection interactively (fzf if available)
 pick_remote(){
   have jq || die "Please install jq."
   local lines; lines="$(list_conns_sorted)"
-  [[ -n "$lines" ]] || die "No podman-remote connections found."
+  
+  if [[ -z "$lines" ]]; then
+    echo "No podman-remote connections found." >&2
+    read -rp "Would you like to setup a new connection? [Y/n]: " yn
+    if [[ "${yn:-Y}" =~ ^[Yy]$ ]]; then
+      setup_connection
+      # Refresh list after setup
+      sleep 1
+      lines="$(list_conns_sorted)"
+      if [[ -z "$lines" ]]; then
+         die "Still no connections found after setup."
+      fi
+    else
+      die "No podman-remote connections found."
+    fi
+  fi
 
   if have fzf; then
     echo "$lines" \
@@ -91,8 +203,8 @@ pick_remote(){
           --preview='echo {2}' --preview-window=down,3,wrap \
     | awk '{print $1}'
   else
-    echo "Available podman-remote connections:"
-    nl -w2 -s") " <(echo "$lines" | awk -F'\t' '{printf "%s%s -> %s\n",$1,($3=="true"?" [default]":""),$2}')
+    echo "Available podman-remote connections:" >&2
+    nl -w2 -s") " <(echo "$lines" | awk -F'\t' '{printf "%s%s -> %s\n",$1,($3=="true"?" [default]":""),$2}') >&2
     local n total; total="$(echo "$lines" | wc -l | tr -d ' ')"
     read -rp "Pick a connection [1-${total}]: " n
     [[ -z "${n:-}" ]] && n=1
@@ -331,6 +443,51 @@ stop_one(){
   echo "Stopped tunnel '$name'."
 }
 
+# Remove a connection configuration
+remove_connection(){
+  local name="$1"
+  if [[ -z "$name" ]]; then
+    name="$(pick_remote)"
+    [[ -n "$name" ]] || return
+  fi
+  
+  read -rp "Are you sure you want to remove connection '$name'? [y/N]: " yn
+  if [[ "${yn:-N}" =~ ^[Yy]$ ]]; then
+    # Stop any active tunnel first
+    stop_one "$name" >/dev/null 2>&1 || true
+    podman-remote system connection rm "$name" || die "Failed to remove connection."
+    echo "Connection '$name' removed."
+  else
+    echo "Cancelled."
+  fi
+}
+
+# Manage connections and tunnels menu
+manage_menu(){
+  while true; do
+    echo
+    echo "Manage Connections/Tunnels"
+    echo "  1) List active tunnels"
+    echo "  2) Stop a tunnel"
+    echo "  3) Remove a connection configuration"
+    echo "  4) Back to main menu"
+    read -rp "Choose [1-4]: " choice
+    case "$choice" in
+      1) list_tunnels ;;
+      2) 
+         echo "Enter tunnel name to stop (or leave empty to pick from active):"
+         # We don't have a picker for active tunnels yet, so just ask for name or list
+         list_tunnels
+         read -rp "Name: " tname
+         [[ -n "$tname" ]] && stop_one "$tname"
+         ;;
+      3) remove_connection "" ;;
+      4) return ;;
+      *) echo "Invalid choice." ;;
+    esac
+  done
+}
+
 # Restart only one tunnel by name: stop, reopen, print exports (no TUI)
 restart_one(){
   have jq || die "Please install jq."
@@ -350,9 +507,21 @@ restart_one(){
   print_exports "$lsock"
 }
 
+# Show a subtle ASCII banner
+show_banner(){
+  cat <<'EOF'
+  _                               _                      
+ | | __ _ _____   _ _ __   ___ __| |_ __ ___   __ _ _ __ 
+ | |/ _` |_  / | | | '_ \ / _ \ _` | '_ ` _ \ / _` | '_ \
+ | | (_| |/ /| |_| | |_) | (_) (_| | | | | | | (_| | | | |
+ |_|\__,_/___|\__, | .__/ \___/\__,_|_| |_| |_|\__,_|_| |_|
+              |___/|_|                                   
+EOF
+}
+
 # --------------------------- Arg parsing -------------------------------------
 
-MODE=""              # "", "local", "remote", "open", "list", "kill", "stop", "restart"
+MODE=""              # "", "local", "remote", "open", "list", "kill", "stop", "restart", "setup"
 REMOTE_NAME=""
 PERSIST=0
 
@@ -368,6 +537,8 @@ if [[ $# -gt 0 ]]; then
       --list-tunnels) MODE="list"; shift ;;
       --kill-tunnels|--stop-all) MODE="kill"; shift ;;
       --stop) MODE="stop"; REMOTE_NAME="${2:-}"; [[ -n "$REMOTE_NAME" ]] || die "Missing remote name"; shift 2 ;;
+      --remove) MODE="remove"; REMOTE_NAME="${2:-}"; [[ -n "$REMOTE_NAME" ]] || die "Missing remote name"; shift 2 ;;
+      --setup) MODE="setup"; shift ;;
       *) echo "Unknown arg: $1"; usage; exit 1 ;;
     esac
   done
@@ -397,31 +568,55 @@ case "$MODE" in
   "kill")
     kill_all_tunnels
     ;;
+  "remove")
+    remove_connection "$REMOTE_NAME"
+    ;;
+  "setup")
+    setup_connection
+    ;;
   "")
     # Interactive menu with a third option: open-only
-    echo "How do you want to connect?"
-    echo "  1) Local (rootless) Podman on this host"
-    echo "  2) Remote Podman via podman-remote connection (run Lazydocker)"
-    echo "  3) Remote Podman: OPEN TUNNEL ONLY (no Lazydocker)"
-    read -rp "Choose [1/2/3]: " choice
-    choice="${choice:-1}"
-    case "$choice" in
-      1) run_local ;;
-      2)
-        name="$(pick_remote)"; [[ -n "$name" ]] || die "No selection made."
-        read -rp "Keep tunnel alive after exit? [y/N]: " yn
-        [[ "${yn:-N}" =~ ^[Yy]$ ]] && PERSIST=1 || PERSIST=0
-        run_remote "$name" "$PERSIST"
-        ;;
-      3)
-        name="$(pick_remote)"; [[ -n "$name" ]] || die "No selection made."
-        open_only "$name"
-        ;;
-      *) die "Invalid choice." ;;
-    esac
+    while true; do
+      echo
+      show_banner
+      echo "How do you want to connect?"
+      echo "  1) Local (rootless) Podman on this host"
+      echo "  2) Remote Podman via podman-remote connection (run Lazydocker)"
+      echo "  3) Remote Podman: OPEN TUNNEL ONLY (no Lazydocker)"
+      echo "  4) Setup new podman-remote connection"
+      echo "  5) Manage Connections/Tunnels"
+      echo "  6) Exit"
+      read -rp "Choose [1-6]: " choice
+      choice="${choice:-1}"
+      case "$choice" in
+        1) run_local ;;
+        2)
+          name="$(pick_remote)"; 
+          if [[ -n "$name" ]]; then
+            read -rp "Keep tunnel alive after exit? [y/N]: " yn
+            [[ "${yn:-N}" =~ ^[Yy]$ ]] && PERSIST=1 || PERSIST=0
+            run_remote "$name" "$PERSIST"
+          fi
+          ;;
+        3)
+          name="$(pick_remote)"; 
+          if [[ -n "$name" ]]; then
+            open_only "$name"
+          fi
+          ;;
+        4)
+          setup_connection
+          ;;
+        5)
+          manage_menu
+          ;;
+        6) exit 0 ;;
+        *) echo "Invalid choice." ;;
+      esac
+    done
     ;;
   *)
     die "Unknown mode. See --help."
     ;;
-esac
+  esac
 
