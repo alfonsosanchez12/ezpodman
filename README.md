@@ -4,7 +4,7 @@
 
 **`ezpodman`** is a Bash wrapper that makes it easy to launch [Lazydocker](https://github.com/jesseduffield/lazydocker) against **local** or **remote rootless Podman** instances using SSH-based tunnels.
 
-- ✔️ Fancy interactive menu (Local / Remote / Tunnel-only / Setup / Manage)
+- ✔️ Fancy interactive menu for settings and manage connections
 - ✔️ **New:** Built-in wizard to setup remote connections (generates SSH keys, copies IDs)
 - ✔️ Auto-configures SSH tunnels to `podman-remote` sockets
 - ✔️ One-tunnel-per-remote with `--open`, `--persist`, `--stop`, `--restart`
@@ -98,130 +98,142 @@ podman-remote system connection add my-remote \
 
 ## 📥 Installation
 
-### Option 1: Install to `/usr/local/bin` (Recommended)
+### Option 1: Install to `~/.local/bin` (Recommended)
 
-```bash
-sudo curl -fsSL https://raw.githubusercontent.com/alfonsosanchez12/ezpodman/main/ezpodman -o /usr/local/bin/ezpodman
-sudo chmod +x /usr/local/bin/ezpodman
-```
+ This is best for single-user systems and doesn't require `sudo`.
 
-This location is in `$PATH` by default on both Linux and macOS.
+ ```bash
+ mkdir -p ~/.local/bin
+ curl -fsSL https://raw.githubusercontent.com/alfonsosanchez12/ezpodman/main/ezpodman -o ~/.local/bin/ezpodman
+ chmod +x ~/.local/bin/ezpodman
+ ```
 
----
+ Ensure `~/.local/bin` is in your `$PATH`.
+
+### Option 2: Install to `/usr/local/bin` (System-wide)
+
+ Best if you want the tool available to all users.
+
+ ```bash
+ sudo curl -fsSL https://raw.githubusercontent.com/alfonsosanchez12/ezpodman/main/ezpodman -o /usr/local/bin/ezpodman
+ sudo chmod +x /usr/local/bin/ezpodman
+ ```
+
+ ---
 
 ## 🔄 Upgrade
 
-To upgrade to the latest version, simply re-run the installation command:
+ Simply re-run the installation command for your chosen method.
 
-**If installed to `/usr/local/bin`:**
-```bash
-sudo curl -fsSL https://raw.githubusercontent.com/alfonsosanchez12/ezpodman/main/ezpodman -o /usr/local/bin/ezpodman
-sudo chmod +x /usr/local/bin/ezpodman
-```
+ To check your current version:
 
-To check your current version:
-```bash
-ezpodman --version
-```
+ ```bash
+ ezpodman --version
+ ```
 
----
+ ---
 
 ## 🗑️ Uninstall
 
 ### Remove the script
 
-**If installed to `/usr/local/bin`:**
-```bash
-sudo rm /usr/local/bin/ezpodman
-```
+ ```bash
+ rm ~/.local/bin/ezpodman
+ # OR
+ sudo rm /usr/local/bin/ezpodman
+ ```
 
 ### Clean up connections and tunnels (optional)
 
-```bash
-# Kill all active tunnels
-ezpodman --kill-tunnels  # (run before removing the script)
-
-# Remove all podman-remote connections created by ezpodman
-podman-remote system connection list
-podman-remote system connection remove <connection-name>
-```
+ ```bash
+ # Kill all active tunnels
+ ezpodman --kill-tunnels  # (run before removing the script)
+ 
+ # Remove all podman-remote connections created by ezpodman
+ podman-remote system connection list
+ podman-remote system connection remove <connection-name>
+ ```
 
 ### Remove SSH keys (optional)
 
-If you want to remove SSH keys created during setup:
+ If you want to remove SSH keys created during setup:
 
-```bash
-rm ~/.ssh/id_ed25519
-rm ~/.ssh/id_ed25519.pub
-```
+ ```bash
+ rm ~/.ssh/id_ed25519
+ rm ~/.ssh/id_ed25519.pub
+ ```
 
-**Note:** Only remove SSH keys if they were created specifically for ezpodman and aren't used elsewhere!
+ **Note:** Only remove SSH keys if they were created specifically for ezpodman and aren't used elsewhere!
 
 ## 🧪 Usage
 
-Interactive menu (recommended)
-`ezpodman`
+### Default Mode (Local)
 
-Option 1: Local (rootless) Podman on this host
+ Running `ezpodman` without arguments will now default to **Local Mode**.
 
-Option 2: Remote Podman via podman-remote connection (run Lazydocker)
+- **Linux**: Connects to the local rootless Podman socket.
+- **macOS**: Automatically detects and tunnels to the default `podman-machine` (treating it as "local").
 
-Option 3: Remote Podman: OPEN TUNNEL ONLY (no Lazydocker)
+ ```bash
+ ezpodman
+ ```
 
-Option 4: Setup new podman-remote connection (Wizard)
+### Remote Mode
 
-Option 5: Manage Connections/Tunnels (List, Stop, Remove)
+ Connect to a remote Podman instance via SSH.
 
-Option 6: Exit
+ ```bash
+ # Open connection picker
+ ezpodman -r
+ 
+ # Connect to a specific remote
+ ezpodman -r my-server
+ ```
 
-### CLI usage
+### Settings & Administration
 
-```bash
-ezpodman                            # Run interactive Menu
-ezpodman --setup                    # Setup a new connection (Wizard)
-ezpodman --remove my-remote         # Remove a connection configuration
-ezpodman --local                    # Run against local Podman
-ezpodman --remote my-remote         # Open tunnel and run Lazydocker
-ezpodman --remote my-remote --persist  # Keep SSH tunnel alive after Lazydocker exits
+ Access the interactive menu for setup and management:
 
-ezpodman --open my-remote           # Just open the tunnel and print env exports
-ezpodman --list-tunnels             # Show tunnels: age, PID, remote uptime
-ezpodman --stop my-remote           # Close a specific tunnel
-ezpodman --restart my-remote        # Restart and show DOCKER_HOST
-ezpodman --kill-tunnels             # Kill all tunnels created by ezpodman
-```
+ ```bash
+ ezpodman -m
+ ```
 
-## 🧼 Maintenance
+### CLI Flags
 
-**List all tunnels**
-`ezpodman --list-tunnels`
+ | Flag | Long Flag | Description |
+ |------|-----------|-------------|
+ | `-l` | `--local` | Run against local Podman (default) |
+ | `-r` | `--remote [name]` | Run against remote. Opens picker if name omitted. |
+ | `-o` | `--open [name]` | Open tunnel ONLY (no Lazydocker), print exports |
+ | `-p` | `--persist` | Keep SSH tunnel alive after Lazydocker exits |
+ | `-S` | `--setup` | Setup a new podman-remote connection (Wizard) |
+ | `-m` | `--menu` | Open Settings/Admin menu |
+ | `-L` | `--list` | List active tunnels |
+ | `-s` | `--stop [name]` | Stop a specific tunnel |
+ | `-k` | `--kill` | Kill ALL tunnels created by ezpodman |
+ | `-R` | `--restart [name]` | Restart a specific tunnel |
+ | `-d` | `--remove [name]` | Remove a connection configuration |
+ | `-h` | `--help` | Show help message |
+ | `-v` | `--version` | Show version info |
 
-**Stop one**
-`ezpodman --stop my-remote`
-
-**Kill all**
-`ezpodman --kill-tunnels`
-
-**Remove a connection**
-`ezpodman --remove my-remote` (or use Option 5 in the menu)
-
-## 🛠️ To-Do
-
- ✅ Add --restart and --list-tunnels with PID/uptime ✔️
-
- ⏳ One-line installer (curl | sh)
-
- ⏳ Homebrew tap / AUR
-
- ⏳ Config file for defaults (API version, autossh, etc.)
-
-## 📁 Project Structure
+### Examples
 
 ```bash
-.
-├── ezpodman                   # Main Bash script
-├── README.md                  # You're here
-└── LICENSE                    # MIT
+# Run local (default)
+ezpodman
+
+# Connect to 'prod-server' and keep tunnel open after exit
+ezpodman -r prod-server -p
+
+# Just open a tunnel to 'dev-box' to use with other tools
+ezpodman -o dev-box
+# > export DOCKER_HOST=unix://...
+
+# List active tunnels
+ezpodman -L
+
+# Stop the 'prod-server' tunnel
+ezpodman -s prod-server
 ```
 
 ## 🧑‍💻 Author
