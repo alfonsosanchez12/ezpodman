@@ -1,6 +1,10 @@
-# lazypodman
+# ezpodman
 
-**`lazypodman`** is a Bash wrapper that makes it easy to launch [Lazydocker](https://github.com/jesseduffield/lazydocker) against **local** or **remote rootless Podman** instances using SSH-based tunnels.
+<div align="center">
+  <img src="assets/banner.svg" alt="EzPodman Banner" width="100%">
+</div>
+
+**`ezpodman`** is a Bash wrapper that makes it easy to launch [Lazydocker](https://github.com/jesseduffield/lazydocker) against **local** or **remote rootless Podman** instances using SSH-based tunnels.
 
 - ✔️ Fancy interactive menu (Local / Remote / Tunnel-only / Setup / Manage)
 - ✔️ **New:** Built-in wizard to setup remote connections (generates SSH keys, copies IDs)
@@ -9,7 +13,13 @@
 - ✔️ Fully Docker-compatible (sets `DOCKER_HOST` + `DOCKER_API_VERSION`)
 - ✔️ Self-contained: no installers or daemons required
 
-> 📦 GitHub repo: https://github.com/alfonsosanchez12/lazypodman
+> 📦 GitHub repo: <https://github.com/alfonsosanchez12/ezpodman>
+
+## 🔄 Project Rename
+
+> **Note:** This project was previously named `lazypodman`. It has been renamed to `ezpodman` to avoid confusion with other GitHub projects and to make it easier to remember and type. All functionality remains the same.
+
+If you forked or bookmarked the old repository, GitHub automatically redirects old URLs to the new name, but we recommend updating your references.
 
 ---
 
@@ -41,13 +51,14 @@ To manage **remote rootless Podman** instances, you can use the built-in wizard 
 
 ### 🪄 Automatic Setup (Recommended)
 
-Run `lazypodman --setup` (or choose Option 4 in the menu).
+Run `ezpodman --setup` (or choose Option 4 in the menu).
 The script will guide you through:
-1.  Naming the connection.
-2.  Specifying the destination (`user@host`).
-3.  **Generating an SSH key** (ed25519) if you don't have one.
-4.  **Copying the SSH key** to the remote host (`ssh-copy-id`).
-5.  Adding the connection to `podman-remote`.
+
+1. Naming the connection.
+2. Specifying the destination (`user@host`).
+3. **Generating an SSH key** (ed25519) if you don't have one.
+4. **Copying the SSH key** to the remote host (`ssh-copy-id`).
+5. Adding the connection to `podman-remote`.
 
 ### 📝 Manual Setup
 
@@ -62,7 +73,7 @@ ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519
 ssh-copy-id user@remote-host
 ```
 
-### 2. On the remote machine (as the same user):
+### 2. On the remote machine (as the same user)
 
 **Enable Podman’s rootless socket and lingering:**
 
@@ -92,8 +103,8 @@ podman-remote system connection add my-remote \
 No installer yet. For now, just:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/alfonsosanchez12/lazypodman/main/lazypodman > ~/.local/bin/lazypodman
-chmod +x ~/.local/bin/lazypodman
+curl -fsSL https://raw.githubusercontent.com/alfonsosanchez12/ezpodman/main/ezpodman > ~/.local/bin/ezpodman
+chmod +x ~/.local/bin/ezpodman
 ```
 
 Make sure ~/.local/bin is in your PATH. Add this to your ~/.bashrc or ~/.zshrc:
@@ -101,8 +112,9 @@ Make sure ~/.local/bin is in your PATH. Add this to your ~/.bashrc or ~/.zshrc:
 `export PATH="$HOME/.local/bin:$PATH"`
 
 ## 🧪 Usage
+
 Interactive menu (recommended)
-`lazypodman`
+`ezpodman`
 
 Option 1: Local (rootless) Podman on this host
 
@@ -119,33 +131,33 @@ Option 6: Exit
 ### CLI usage
 
 ```bash
-lazypodman                            # Run interactive Menu
-lazypodman --setup                    # Setup a new connection (Wizard)
-lazypodman --remove my-remote         # Remove a connection configuration
-lazypodman --local                    # Run against local Podman
-lazypodman --remote my-remote         # Open tunnel and run Lazydocker
-lazypodman --remote my-remote --persist  # Keep SSH tunnel alive after Lazydocker exits
+ezpodman                            # Run interactive Menu
+ezpodman --setup                    # Setup a new connection (Wizard)
+ezpodman --remove my-remote         # Remove a connection configuration
+ezpodman --local                    # Run against local Podman
+ezpodman --remote my-remote         # Open tunnel and run Lazydocker
+ezpodman --remote my-remote --persist  # Keep SSH tunnel alive after Lazydocker exits
 
-lazypodman --open my-remote           # Just open the tunnel and print env exports
-lazypodman --list-tunnels             # Show tunnels: age, PID, remote uptime
-lazypodman --stop my-remote           # Close a specific tunnel
-lazypodman --restart my-remote        # Restart and show DOCKER_HOST
-lazypodman --kill-tunnels             # Kill all tunnels created by lazypodman
+ezpodman --open my-remote           # Just open the tunnel and print env exports
+ezpodman --list-tunnels             # Show tunnels: age, PID, remote uptime
+ezpodman --stop my-remote           # Close a specific tunnel
+ezpodman --restart my-remote        # Restart and show DOCKER_HOST
+ezpodman --kill-tunnels             # Kill all tunnels created by ezpodman
 ```
 
 ## 🧼 Maintenance
 
 **List all tunnels**
-`lazypodman --list-tunnels`
+`ezpodman --list-tunnels`
 
 **Stop one**
-`lazypodman --stop my-remote`
+`ezpodman --stop my-remote`
 
 **Kill all**
-`lazypodman --kill-tunnels`
+`ezpodman --kill-tunnels`
 
 **Remove a connection**
-`lazypodman --remove my-remote` (or use Option 5 in the menu)
+`ezpodman --remove my-remote` (or use Option 5 in the menu)
 
 ## 🛠️ To-Do
 
@@ -158,9 +170,10 @@ lazypodman --kill-tunnels             # Kill all tunnels created by lazypodman
  ⏳ Config file for defaults (API version, autossh, etc.)
 
 ## 📁 Project Structure
+
 ```bash
 .
-├── lazypodman                 # Main Bash script
+├── ezpodman                   # Main Bash script
 ├── README.md                  # You're here
 └── LICENSE                    # MIT
 ```
