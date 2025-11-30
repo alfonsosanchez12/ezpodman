@@ -409,12 +409,44 @@ export DOCKER_API_VERSION=${API_FLOOR}
 EOF
 }
 
+# Get the default connection object (as JSON string)
+get_default_conn() {
+  conn_json | jq -r 'map(select(.Default==true)) | (.[0] // empty) | @json'
+}
+
 # Run Lazydocker against local Podman
 run_local() {
-  ensure_local_socket
-  export DOCKER_HOST="unix://$LOCAL_PODMAN_SOCK"
-  export DOCKER_API_VERSION="$API_FLOOR"
-  exec lazydocker
+  if [[ "$(uname)" == "Darwin" ]]; then
+    # On macOS, "local" usually means the default podman machine (which is remote via SSH)
+    have jq || die "Please install jq."
+    
+    local conn
+    conn="$(get_default_conn)"
+    [[ -n "$conn" && "$conn" != "null" ]] || die "No default podman connection found. Is 'podman machine' running?"
+
+    local name uri identity
+    name="$(echo "$conn" | jq -r '.Name')"
+    uri="$(echo "$conn" | jq -r '.URI')"
+    identity="$(echo "$conn" | jq -r '.Identity // empty')"
+
+    echo "Detected macOS: Connecting to default machine '$name'..." >&2
+
+    local lsock
+    lsock="$(open_tunnel "$name" "$uri" "$identity")"
+
+    export DOCKER_HOST="unix://$lsock"
+    export DOCKER_API_VERSION="$API_FLOOR"
+
+    # Auto-close tunnel on exit
+    trap "close_tunnel '$name'" EXIT
+    exec lazydocker
+  else
+    # Linux / Native
+    ensure_local_socket
+    export DOCKER_HOST="unix://$LOCAL_PODMAN_SOCK"
+    export DOCKER_API_VERSION="$API_FLOOR"
+    exec lazydocker
+  fi
 }
 
 # Run Lazydocker against a remote (optionally persist the tunnel)
