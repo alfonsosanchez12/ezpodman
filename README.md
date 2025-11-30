@@ -98,16 +98,64 @@ podman-remote system connection add my-remote \
 
 ## 📥 Installation
 
-No installer yet. For now, just:
+### Option 1: Install to `/usr/local/bin` (Recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/alfonsosanchez12/ezpodman/main/ezpodman > ~/.local/bin/ezpodman
-chmod +x ~/.local/bin/ezpodman
+sudo curl -fsSL https://raw.githubusercontent.com/alfonsosanchez12/ezpodman/main/ezpodman -o /usr/local/bin/ezpodman
+sudo chmod +x /usr/local/bin/ezpodman
 ```
 
-Make sure ~/.local/bin is in your PATH. Add this to your ~/.bashrc or ~/.zshrc:
+This location is in `$PATH` by default on both Linux and macOS.
 
-`export PATH="$HOME/.local/bin:$PATH"`
+---
+
+## 🔄 Upgrade
+
+To upgrade to the latest version, simply re-run the installation command:
+
+**If installed to `/usr/local/bin`:**
+```bash
+sudo curl -fsSL https://raw.githubusercontent.com/alfonsosanchez12/ezpodman/main/ezpodman -o /usr/local/bin/ezpodman
+sudo chmod +x /usr/local/bin/ezpodman
+```
+
+To check your current version:
+```bash
+ezpodman --version
+```
+
+---
+
+## 🗑️ Uninstall
+
+### Remove the script
+
+**If installed to `/usr/local/bin`:**
+```bash
+sudo rm /usr/local/bin/ezpodman
+```
+
+### Clean up connections and tunnels (optional)
+
+```bash
+# Kill all active tunnels
+ezpodman --kill-tunnels  # (run before removing the script)
+
+# Remove all podman-remote connections created by ezpodman
+podman-remote system connection list
+podman-remote system connection remove <connection-name>
+```
+
+### Remove SSH keys (optional)
+
+If you want to remove SSH keys created during setup:
+
+```bash
+rm ~/.ssh/id_ed25519
+rm ~/.ssh/id_ed25519.pub
+```
+
+**Note:** Only remove SSH keys if they were created specifically for ezpodman and aren't used elsewhere!
 
 ## 🧪 Usage
 
