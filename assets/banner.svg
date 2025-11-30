@@ -62,6 +62,6 @@
   <!-- Terminal command examples (subtle) -->
   <g opacity="0.3" font-family="'Courier New', monospace" font-size="14" fill="#a6e3a1">
     <text x="80" y="270">ezpodman -r</text>
-    <text x="950" y="270">ezpodman -c</text>
+    <text x="950" y="270">ezpodman -m</text>
   </g>
 </svg>

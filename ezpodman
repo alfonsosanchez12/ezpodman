@@ -23,6 +23,7 @@ set -euo pipefail
 
 # --------------------------- Configuration -----------------------------------
 
+VERSION="1.0.0"
 API_FLOOR="${DOCKER_API_VERSION:-1.41}" # conservative Docker API for Podman
 RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 LOCAL_PODMAN_SOCK="${RUNTIME_DIR}/podman/podman.sock"
@@ -37,28 +38,6 @@ die() {
 }
 have() { command -v "$1" >/dev/null 2>&1; }
 
-usage() {
-  cat <<'EOF'
-Usage:
-  ezpodman                        # interactive menu
-  ezpodman --setup                # setup a new podman-remote connection
-  ezpodman --remove <name>        # remove a podman-remote connection
-  ezpodman --local                # local rootless Podman
-  ezpodman --remote <name>        # remote by connection name (run Lazydocker)
-  ezpodman --remote <name> --persist
-                                    # keep tunnel running after exit
-  ezpodman --open <name>          # ONLY open tunnel (no Lazydocker), print exports
-  ezpodman --restart <name>       # stop & reopen ONLY the named tunnel, print exports
-  ezpodman --list-tunnels         # list tunnels (state, age, SSH PID, remote uptime)
-  ezpodman --stop <name>          # stop ONLY the named tunnel
-  ezpodman --kill-tunnels         # close ALL tunnels created by this tool
-  ezpodman --stop-all             # alias for --kill-tunnels
-Options:
-  --persist         Keep SSH tunnel alive after Lazydocker exits (remote mode)
-Env:
-  DOCKER_API_VERSION (default: 1.41)
-EOF
-}
 
 # Ensure the local rootless Podman socket is up and listening
 ensure_local_socket() {
@@ -594,75 +573,152 @@ EOF
 
 # --------------------------- Arg parsing -------------------------------------
 
-MODE="" # "", "local", "remote", "open", "list", "kill", "stop", "restart", "setup"
+usage() {
+  cat <<EOF
+Usage:
+  ezpodman [options]
+
+Modes:
+  (default)                       Run Lazydocker against local Podman
+  -l, --local                     Explicitly run local Podman
+  -r, --remote [name]             Run Lazydocker against a remote connection
+                                  (opens picker if name is omitted)
+  -o, --open [name]               Open tunnel ONLY (no Lazydocker), print exports
+  -S, --setup                     Setup a new podman-remote connection
+  -m, --menu                      Open Settings/Admin menu
+
+Management:
+  -L, --list                      List active tunnels
+  -s, --stop [name]               Stop a specific tunnel
+  -k, --kill                      Kill ALL tunnels created by ezpodman
+  -R, --restart [name]            Restart a specific tunnel
+  -d, --remove [name]             Remove a connection configuration
+
+Options:
+  -p, --persist                   Keep SSH tunnel alive after Lazydocker exits
+  -h, --help                      Show this help message
+  -v, --version                   Show version info
+
+Env:
+  DOCKER_API_VERSION (default: 1.41)
+EOF
+}
+
+# Settings menu (formerly manage_menu + setup)
+settings_menu() {
+  while true; do
+    echo
+    echo "Settings & Administration"
+    echo "  1) Setup new podman-remote connection"
+    echo "  2) List active tunnels"
+    echo "  3) Stop a tunnel"
+    echo "  4) Remove a connection configuration"
+    echo "  5) Kill ALL tunnels"
+    echo "  6) Exit menu"
+    read -rp "Choose [1-6]: " choice
+    case "$choice" in
+    1) setup_connection ;;
+    2) list_tunnels ;;
+    3)
+      list_tunnels
+      read -rp "Enter tunnel name to stop: " tname
+      [[ -n "$tname" ]] && stop_one "$tname"
+      ;;
+    4) remove_connection "" ;;
+    5) kill_all_tunnels ;;
+    6) return ;;
+    *) echo "Invalid choice." ;;
+    esac
+  done
+}
+
+MODE="local" # Default mode
 REMOTE_NAME=""
 PERSIST=0
 
-if [[ $# -gt 0 ]]; then
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-    --help | -h)
-      usage
-      exit 0
-      ;;
-    --local)
-      MODE="local"
+# Manual argument parsing to handle optional values for flags like -r
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  -v | --version)
+    echo "ezpodman v$VERSION"
+    exit 0
+    ;;
+  -l | --local)
+    MODE="local"
+    shift
+    ;;
+  -r | --remote)
+    MODE="remote"
+    # Check if next arg is a value (not starting with -)
+    if [[ $# -gt 1 && "$2" != -* ]]; then
+      REMOTE_NAME="$2"
       shift
-      ;;
-    --remote)
-      MODE="remote"
-      REMOTE_NAME="${2:-}"
-      [[ -n "$REMOTE_NAME" ]] || die "Missing remote name"
-      shift 2
-      ;;
-    --open)
-      MODE="open"
-      REMOTE_NAME="${2:-}"
-      [[ -n "$REMOTE_NAME" ]] || die "Missing remote name"
-      shift 2
-      ;;
-    --restart)
-      MODE="restart"
-      REMOTE_NAME="${2:-}"
-      [[ -n "$REMOTE_NAME" ]] || die "Missing remote name"
-      shift 2
-      ;;
-    --persist)
-      PERSIST=1
+    fi
+    shift
+    ;;
+  -o | --open)
+    MODE="open"
+    if [[ $# -gt 1 && "$2" != -* ]]; then
+      REMOTE_NAME="$2"
       shift
-      ;;
-    --list-tunnels)
-      MODE="list"
+    fi
+    shift
+    ;;
+  -p | --persist)
+    PERSIST=1
+    shift
+    ;;
+  -L | --list | --list-tunnels)
+    MODE="list"
+    shift
+    ;;
+  -k | --kill | --kill-tunnels | --stop-all)
+    MODE="kill"
+    shift
+    ;;
+  -s | --stop)
+    MODE="stop"
+    if [[ $# -gt 1 && "$2" != -* ]]; then
+      REMOTE_NAME="$2"
       shift
-      ;;
-    --kill-tunnels | --stop-all)
-      MODE="kill"
+    fi
+    shift
+    ;;
+  -d | --remove)
+    MODE="remove"
+    if [[ $# -gt 1 && "$2" != -* ]]; then
+      REMOTE_NAME="$2"
       shift
-      ;;
-    --stop)
-      MODE="stop"
-      REMOTE_NAME="${2:-}"
-      [[ -n "$REMOTE_NAME" ]] || die "Missing remote name"
-      shift 2
-      ;;
-    --remove)
-      MODE="remove"
-      REMOTE_NAME="${2:-}"
-      [[ -n "$REMOTE_NAME" ]] || die "Missing remote name"
-      shift 2
-      ;;
-    --setup)
-      MODE="setup"
+    fi
+    shift
+    ;;
+  -R | --restart)
+    MODE="restart"
+    if [[ $# -gt 1 && "$2" != -* ]]; then
+      REMOTE_NAME="$2"
       shift
-      ;;
-    *)
-      echo "Unknown arg: $1"
-      usage
-      exit 1
-      ;;
-    esac
-  done
-fi
+    fi
+    shift
+    ;;
+  -S | --setup)
+    MODE="setup"
+    shift
+    ;;
+  -m | --menu)
+    MODE="menu"
+    shift
+    ;;
+  *)
+    echo "Unknown argument: $1"
+    usage
+    exit 1
+    ;;
+  esac
+done
 
 # ------------------------------- Main ----------------------------------------
 
@@ -671,18 +727,30 @@ case "$MODE" in
   run_local
   ;;
 "remote")
-  run_remote "$REMOTE_NAME" "$PERSIST"
+  if [[ -z "$REMOTE_NAME" ]]; then
+    REMOTE_NAME="$(pick_remote)"
+  fi
+  if [[ -n "$REMOTE_NAME" ]]; then
+    run_remote "$REMOTE_NAME" "$PERSIST"
+  fi
   ;;
 "open")
-  open_only "$REMOTE_NAME"
+  if [[ -z "$REMOTE_NAME" ]]; then
+    REMOTE_NAME="$(pick_remote)"
+  fi
+  if [[ -n "$REMOTE_NAME" ]]; then
+    open_only "$REMOTE_NAME"
+  fi
   ;;
 "restart")
+  [[ -n "$REMOTE_NAME" ]] || die "Missing remote name for restart."
   restart_one "$REMOTE_NAME"
   ;;
 "list")
   list_tunnels
   ;;
 "stop")
+  [[ -n "$REMOTE_NAME" ]] || die "Missing remote name to stop."
   stop_one "$REMOTE_NAME"
   ;;
 "kill")
@@ -694,48 +762,11 @@ case "$MODE" in
 "setup")
   setup_connection
   ;;
-"")
-  # Interactive menu with a third option: open-only
-  while true; do
-    echo
-    show_banner
-    echo "How do you want to connect?"
-    echo "  1) Local (rootless) Podman on this host"
-    echo "  2) Remote Podman via podman-remote connection (run Lazydocker)"
-    echo "  3) Remote Podman: OPEN TUNNEL ONLY (no Lazydocker)"
-    echo "  4) Setup new podman-remote connection"
-    echo "  5) Manage Connections/Tunnels"
-    echo "  6) Exit"
-    read -rp "Choose [1-6]: " choice
-    choice="${choice:-1}"
-    case "$choice" in
-    1) run_local ;;
-    2)
-      name="$(pick_remote)"
-      if [[ -n "$name" ]]; then
-        read -rp "Keep tunnel alive after exit? [y/N]: " yn
-        [[ "${yn:-N}" =~ ^[Yy]$ ]] && PERSIST=1 || PERSIST=0
-        run_remote "$name" "$PERSIST"
-      fi
-      ;;
-    3)
-      name="$(pick_remote)"
-      if [[ -n "$name" ]]; then
-        open_only "$name"
-      fi
-      ;;
-    4)
-      setup_connection
-      ;;
-    5)
-      manage_menu
-      ;;
-    6) exit 0 ;;
-    *) echo "Invalid choice." ;;
-    esac
-  done
+"menu")
+  show_banner
+  settings_menu
   ;;
 *)
-  die "Unknown mode. See --help."
+  die "Unknown mode."
   ;;
 esac
