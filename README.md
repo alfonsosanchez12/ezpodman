@@ -1,5 +1,3 @@
-# ezpodman
-
 <div align="center">
   <img src="assets/banner.svg" alt="EzPodman Banner" width="100%">
 </div>
