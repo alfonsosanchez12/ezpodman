@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300">
+  <!-- Catppuccin Mocha background -->
+  <rect width="1200" height="300" fill="#1e1e2e"/>
+  
+  <!-- Grid pattern -->
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#89b4fa" stroke-width="0.5" opacity="0.1"/>
+    </pattern>
+    <linearGradient id="textGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#89b4fa;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#b4befe;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#89b4fa;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <rect width="1200" height="300" fill="url(#grid)"/>
+  
+  <!-- Terminal prompt style elements -->
+  <g opacity="0.6">
+    <!-- Top left terminal decoration -->
+    <text x="40" y="45" font-family="'Courier New', monospace" font-size="18" fill="#89b4fa">$</text>
+    <text x="60" y="45" font-family="'Courier New', monospace" font-size="18" fill="#a6e3a1">user@localhost:~</text>
+    
+    <!-- Blinking cursor effect -->
+    <rect x="1140" y="245" width="12" height="20" fill="#89b4fa" opacity="0.8">
+      <animate attributeName="opacity" values="0.8;0;0.8" dur="1.5s" repeatCount="indefinite"/>
+    </rect>
+  </g>
+  
+  <!-- Matrix-style falling characters (subtle) -->
+  <g opacity="0.15" font-family="'Courier New', monospace" font-size="14" fill="#a6e3a1">
+    <text x="150" y="60">01</text>
+    <text x="320" y="100">10</text>
+    <text x="850" y="80">11</text>
+    <text x="1050" y="120">01</text>
+    <text x="200" y="250">10</text>
+    <text x="950" y="240">11</text>
+  </g>
+  
+  <!-- Container bracket decorations -->
+  <g stroke="#89b4fa" stroke-width="2" fill="none" opacity="0.4">
+    <path d="M 200 120 L 180 120 L 180 180 L 200 180"/>
+    <path d="M 1000 120 L 1020 120 L 1020 180 L 1000 180"/>
+  </g>
+  
+  <!-- Main command-style text -->
+  <text x="600" y="135" font-family="'Courier New', monospace" font-size="72" font-weight="700" fill="url(#textGlow)" text-anchor="middle">
+    $ ezpodman
+  </text>
+  
+  <!-- Glowing underline effect -->
+  <line x1="350" y1="145" x2="850" y2="145" stroke="#89b4fa" stroke-width="2" opacity="0.3">
+    <animate attributeName="opacity" values="0.3;0.6;0.3" dur="2s" repeatCount="indefinite"/>
+  </line>
+  
+  <!-- Tagline in comment style -->
+  <text x="600" y="190" font-family="'Courier New', monospace" font-size="20" fill="#6c7086" text-anchor="middle">
+    # Easy Podman Management via Lazy Docker
+  </text>
+  
+  <!-- Terminal command examples (subtle) -->
+  <g opacity="0.3" font-family="'Courier New', monospace" font-size="14" fill="#a6e3a1">
+    <text x="80" y="270">ezpodman -r</text>
+    <text x="950" y="270">ezpodman -c</text>
+  </g>
+</svg>
