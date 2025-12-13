@@ -38,7 +38,6 @@ die() {
 }
 have() { command -v "$1" >/dev/null 2>&1; }
 
-
 # Ensure the local rootless Podman socket is up and listening
 ensure_local_socket() {
   if have loginctl; then loginctl enable-linger "$USER" >/dev/null 2>&1 || true; fi
@@ -51,11 +50,6 @@ conn_json() {
   if podman-remote system connection list --format json >/dev/null 2>&1; then
     podman-remote system connection list --format json
   else
-    # If no connections exist, it might exit 0 with empty array or fail?
-    # Usually it returns [] if none. If it fails, it might be version issue.
-    # But if it returns nothing or fails, we can handle it.
-    # Actually podman-remote system connection list might return nothing if empty.
-    # Let's try to run it and capture.
     local out
     out="$(podman-remote system connection list --format json 2>/dev/null || echo "[]")"
     [[ -z "$out" ]] && out="[]"
@@ -111,10 +105,7 @@ setup_connection() {
     echo >&2
     read -rp "Copy SSH key to remote host ($dest)? [y/N]: " yn
     if [[ "${yn:-N}" =~ ^[Yy]$ ]]; then
-      # Need to parse user/host from dest for ssh-copy-id
-      # dest is user@host or host
-      # ssh-copy-id handles user@host fine.
-      # We also need port if not 22.
+      # Parse user/host from dest for ssh-copy-id
       local copy_args=(-i "${default_identity}.pub")
       [[ "$port" != "22" ]] && copy_args+=(-p "$port")
       copy_args+=("$dest")
@@ -287,7 +278,7 @@ kill_all_tunnels() {
   echo "All ezpodman tunnels closed."
 }
 
-# Human-friendly age from file mtime (e.g., "5m", "2h", "1d")
+# Friendly age from file mtime (e.g., "5m", "2h", "1d")
 file_age() {
   local f="$1" secs
   if [[ "$(uname)" == "Darwin" ]]; then
@@ -316,7 +307,6 @@ is_master_running() {
 get_master_pid() {
   local csock="$1" out
   out="$(ssh -S "$csock" -O check dummy 2>&1 || true)"
-  # Typical output: "Master running (pid 12345)"
   echo "$out" | sed -nE 's/.*pid[[:space:]]+([0-9]+).*/\1/p' | head -n1
 }
 
@@ -360,7 +350,6 @@ list_tunnels() {
     local pid=""
     [[ "$state" == "up" ]] && pid="$(get_master_pid "$csock")"
 
-    # Remote uptime is best-effort; try 'uptime -p' then fallback to 'uptime'
     local rup="n/a"
     if [[ "$state" == "up" && "$dest" != "unknown" ]]; then
       rup="$(ssh_via_csock "$csock" "$dest" 'uptime -p || uptime' | tr -d '\r' | head -n1)"
@@ -398,7 +387,7 @@ run_local() {
   if [[ "$(uname)" == "Darwin" ]]; then
     # On macOS, "local" usually means the default podman machine (which is remote via SSH)
     have jq || die "Please install jq."
-    
+
     local conn
     conn="$(get_default_conn)"
     [[ -n "$conn" && "$conn" != "null" ]] || die "No default podman connection found. Is 'podman machine' running?"
@@ -558,7 +547,6 @@ restart_one() {
   print_exports "$lsock"
 }
 
-# Show a subtle ASCII banner
 show_banner() {
   cat <<'EOF'
   
